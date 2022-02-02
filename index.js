@@ -3,7 +3,7 @@
 
 // @ts-ignore
 import twgl from "https://dev.jspm.io/twgl.js"
-import { ZShaderWrapper } from './z-shader-wrapper/index.js'
+import { ZShaderWrapper } from './zModules/zShader.js'
 
 // WebGL
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('canvasgl'))
