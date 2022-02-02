@@ -103,9 +103,7 @@ import {glsl as dr} from './draw.frag.js'
 // console.log(dr)
 
 const passes = {
-  // @ts-ignore
   gi: zsw.createPass(gi, [canvas.width, canvas.height]),
-  // @ts-ignore
   draw: zsw.createPass(dr)
 }
 
@@ -134,7 +132,7 @@ function draw () {
 
   tick++
   console.log(tick)
-  if (tick < 100) {
+  if (tick < 10) {
     requestAnimationFrame(draw)
   }
 }

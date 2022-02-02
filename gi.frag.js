@@ -1,4 +1,4 @@
-import * as g from '../zModules/glsl.js'
+import * as g from './zModules/glsl.js'
 
 export let glsl = /*glsl*/`#version 300 es
 precision highp float;

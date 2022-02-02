@@ -7736,7 +7736,7 @@ function draw() {
     }, 'screen');
     tick++;
     console.log(tick);
-    if (tick < 100) {
+    if (tick < 10) {
         requestAnimationFrame(draw);
     }
 }
