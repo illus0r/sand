@@ -15,8 +15,9 @@ ${ g.rnd + g.PI + g.rot + g.colorGradient }
 #define EPS .001
 #define REFLECTIONS 4.
 #define MAX_STEPS 200.
-#define MAX_DIST 50.
-#define UV_SCALE 16.
+#define MAX_DIST 640.
+#define UV_SCALE 64.
+#define SKIP_FRAMES 1
 
 out vec4 o;
 
@@ -189,11 +190,7 @@ float sdf(vec3 p) {
     }
 }
 
-vec3 norm(vec3 p) {
-    float d = sdf(p);
-    vec2 e = vec2(.0001, 0);
-    return normalize(vec3(d - sdf(p - e.xyy), d - sdf(p - e.yxy), d - sdf(p - e.yyx)));
-}
+${ g.norm } // calculated from sdf(p)
 
 vec3 getLight(vec3 p) {
     // if(p.y > 30. && p.z > 0. && p.x > 0.)
@@ -203,11 +200,16 @@ vec3 getLight(vec3 p) {
     // if(p.y > 16.)
     //     return vec3(50, 15, 15);
     if(kHit == kDepthMin)
-        return colorGradient(voxelId * .2 + objId) * rnd(voxelId) * rnd(voxelId) * 4.;
+        return colorGradient(voxelId * .2 + objId, vec3(rnd(objId),rnd(objId+.1),rnd(objId+.2))) * rnd(voxelId) * rnd(voxelId) * 4.;
     return vec3(0);
 }
 
 void main() {
+    if((int(gl_FragCoord.x) ^ int(gl_FragCoord.y) + int(u_frame)) % SKIP_FRAMES > 0) {
+        o = texture(backbuffer, gl_FragCoord.xy / u_resolution);
+        return;
+    }
+
     float i, d, e, rfl, l;
 
     vec2 uv = (gl_FragCoord.xy + rnd(length(mod(vec3(gl_FragCoord.xy, u_time), 3.141592))) - .5 - u_resolution * .5) / u_resolution.y + .001;
@@ -272,13 +274,14 @@ void main() {
         }
     }
     col *= light;
-    o += mix(texture(backbuffer, gl_FragCoord.xy / u_resolution), col.rgbb, 1. / (u_frame + 1.));
+    o += mix(texture(backbuffer, gl_FragCoord.xy / u_resolution), col.rgbb, 1. / (floor(u_frame / float(SKIP_FRAMES)) + 1.));
     // o += 10./i * tex;
     // o.rgb = n * .5 + .5;
     // if(kHit == kDepthMin)
         // o *= 0.;//kHit/6.;
     o.a = 1.;
 
-    // o = vec4(1,1,0,1);
+    // if(p.y < -64.) 
+    // o = vec4(1,0,0,1);
 }
 `

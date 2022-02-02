@@ -1,22 +1,13 @@
 {
     "filewatcher.commands": [
         {
+            // "match": "*",
             "match": "\\.js*",
             "isAsync": true,
             "cmd": "date; deno bundle --quiet ${workspaceRoot}/index.js ${workspaceRoot}/dist/index.js",
             "event": "onFileChange"
-        }        
+        }
     ],
 
 	"liveServer.settings.root": "/dist",
-
-    // "emeraldwalk.runonsave": {
-    //     "commands": [
-    //         {
-    //             "match": ".*",
-    //             "isAsync": true,
-    //             "cmd": "deno bundle --quiet ${workspaceFolder}/index.js ${workspaceFolder}/dist/index.js"
-    //         },
-    //     ]
-    // },
 }

@@ -1,4 +1,3 @@
-
 // @ts-check
 
 // @ts-ignore
@@ -25,6 +24,7 @@ function prepare2dSegmentsMap () {
     return relief[i][j]
   }
 
+  // карта скатывания в кластеры
   for (let x = 0; x < voxelsNum; x++) {
     for (let y = 0; y < voxelsNum; y++) {
       const S = 3
@@ -68,11 +68,12 @@ function prepareTexVoxels () {
   for (let x = 1; x < voxelsNum; x++) {
     for (let z = 1; z < voxelsNum; z++) {
       const id = segments[x][z]
-      let height = -63
+      let height = 1
+      // if not on the edge
       if (id === segments[x - 1][z] && id === segments[x][z - 1] && id === segments[x - 1][z - 1]) {
-        height = 4 + 8 * rnd(id)
+        height = 64 + 8 * rnd(id)
       }
-      for (let y = 0; y < 64 + height; y++) {
+      for (let y = 0; y < height; y++) {
         texVoxelsArray[x][y][z] = [id, 0, 0, 0].map(d => d * 255)
       }
     }
@@ -132,7 +133,7 @@ function draw () {
 
   tick++
   console.log(tick)
-  if (tick < 10) {
+  if (tick < 1000) {
     requestAnimationFrame(draw)
   }
 }
@@ -144,8 +145,8 @@ window.addEventListener('resize', (e) => {
 })
 
 function resize () {
-  const w = window.innerWidth * window.devicePixelRatio
-  const h = window.innerHeight * window.devicePixelRatio
+  const w = window.innerWidth // FIXME * window.devicePixelRatio
+  const h = window.innerHeight // FIXME * window.devicePixelRatio
   twgl.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h)
   passes.gi.resolution = [w, h]
