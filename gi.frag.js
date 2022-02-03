@@ -15,8 +15,10 @@ out vec4 o;
 ${ g.rnd + g.rnd2D + g.PI + g.rot + g.colorGradient }
 ${ g.snoiseCommon + g.snoise3D }
 
+// #define tex(i,j) (floor(texture(backbuffer,fract((FC.xy+vec2(i,j))/u_resolution))*3e3)/3e3)
 #define tex(i,j) texture(backbuffer,fract((FC.xy+vec2(i,j))/u_resolution))
-#define tx(i,j) (floor(tex(i,j).a*3e3)/3e3)
+#define isZero(x) (abs(x)<.01)
+#define tx(i,j) tex(i,j).a
 #define isGround(v) (abs(v-.5)<.1) 
 #define isSand(v) (abs(v-1.)<.1)
 #define fallL(i,j) (int(f)%2==0)
@@ -38,23 +40,28 @@ vec3 add = vec3(.5, .5, .5);
 void main() {
 
     vec2 uv = FC.xy/u_resolution;
-    // o = tex(0,1);
-    // if(f > 10.) return;
-    // o=vec4(rnd2D(uv*99.));
+    // o = tex(1,-1);
+    // if(f > 1.) return;
+    // // o=vec4(rnd2D(uv*99.));
+    // o=vec4((int(FC.x) ^ int(FC.y)) % 9 == 0);
+    // return;
 
 
     // if(FC.y<1.){o.a=.5;return;} 
-    if(f<4. && uv.y>.99){
+    if(u_frame<1.){
         o.a = 1.;
-        o.rgb = col((uv.y-.99)/.01);  
+        o.rgb = col(uv.x);
+        o *= step(length(uv-.5),.01);
+        return;
     }
-    if(tx(0,0)==0. || isGround(tx(0,0))){
-        float noise = snoise3D(vec3(uv*8.,t*.0));  
+    if(isZero(tx(0,0)) || isGround(tx(0,0))){
+        float noise = snoise3D(vec3(uv*8.,t*.1));  
         if(noise > .3){
             o.a=.5;//floor(noise*noise*3.)/2.;
             // o.rgb+=.5;
             return;
         }
+        // if(FC.y < 1.){o.a=.5;return;}
     }
 
     // if(isGround(v)){
@@ -65,14 +72,14 @@ void main() {
     if(isSand(tx(0,0))){
         o=tex(0,0);
         // если снизу дырка
-        if(tx(0,-1)==0.){  
+        if(isZero(tx(0,-1))){  
             // если ничего не прилетит в эту дырку слева  
             if(isSand(tx(-1,0)) && tx(-1,-1)>0. && fallR(-1,0) && prio(0,0)< prio(-1,0)) return;
             if(isSand(tx( 1,0)) && tx( 1,-1)>0. && fallL( 1,0) && prio(0,0)<=prio( 1,0)) return;
             o.a-=1.;
         }
         // если слева дырка
-        if(tx(-1,-1)==0. && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
+        if(isZero(tx(-1,-1)) && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
             // если ничего не прилетит в эту ячейку сверху
             if(isSand(tx(-1,0)) && prio(0,0)>=prio(-1,0)) return;
             // если ничего не прилетит в эту ячейку ещё более слева
@@ -80,7 +87,7 @@ void main() {
             o.a-=1.;
         }
         // если справа дырка
-        if(tx(1,-1)==0. && fallR(0,0)){
+        if(isZero(tx(1,-1)) && fallR(0,0)){
             // если ничего не прилетит в эту ячейку сверху
             if(isSand(tx(1,0)) && prio(0,0)>prio(1,0)) return;
             // если ничего не прилетит в эту ячейку ещё более справа
@@ -93,7 +100,7 @@ void main() {
         if(isSand(tx(0,1)))
             o=tex(0,1);
         if(isSand(tx(1,1))) // справа вверху песок
-            if(tx(1,0)>0.) // он на чём-то лежит.
+            if(!isZero(tx(1,0))) // он на чём-то лежит.
             if(fallL(1,1)){ // она хочет бухнуться влево
                 o=tex(1,1);
                 if(isSand(tx(0,1)) && prio(0,1)>prio(1,1))
@@ -102,7 +109,7 @@ void main() {
                 o=tex(-1,1);
             }
         if(isSand(tx(-1,1))) // слева вверху песок
-            if(tx(-1,0)>0.) // он на чём-то лежит.
+            if(!isZero(tx(-1,0))) // он на чём-то лежит.
             if(fallR(-1,1)) { // она хочет бухнуться влево
             o=tex(-1,1);
                 if(isSand(tx(0,1)) && prio(0,1)>prio(-1,1))

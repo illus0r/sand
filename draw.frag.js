@@ -19,6 +19,7 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
   vec2 uvN = gl_FragCoord.xy / u_resolution;
+  uvN = (floor(uvN*128.) + .5)/128.;
   o = texture(tex, uvN);
   // o.rgb = ACESFilm(o.rgb);
   o.rgb *= o.a;

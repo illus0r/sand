@@ -38,16 +38,18 @@ import {glsl as dr} from './draw.frag.js'
 // console.log(dr)
 
 const passes = {
-  gi: zsw.createPass(gi, [canvas.width, canvas.height]),
+  gi: zsw.createPass(gi, [128,128], gl.RGBA),
   draw: zsw.createPass(dr)
 }
 
+
+
 const params = [...Array(10)].map(() => Math.random())
 
-const timeI = new Date().getSeconds()
+const timeI = new Date() / 1000
 
 function draw () {
-  const time = new Date().getSeconds()
+  const time = new Date() / 1000
   twgl.resizeCanvasToDisplaySize(gl.canvas)
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
 
@@ -58,7 +60,7 @@ function draw () {
     u_params: params,
     // u_tex_voxels: texVoxels,
     u_voxels_num: voxelsNum,
-    u_resolution: [canvas.width, canvas.height],
+    u_resolution: [128,128],
   }, 'self')
 
   passes.draw.draw({
@@ -71,6 +73,7 @@ function draw () {
   // if (tick < 10) {
   requestAnimationFrame(draw)
   // }
+  // setTimeout(draw,500)
 }
 
 draw()
@@ -80,8 +83,8 @@ window.addEventListener('resize', (e) => {
 })
 
 function resize () {
-  const w = window.innerWidth// * window.devicePixelRatio
-  const h = window.innerHeight// * window.devicePixelRatio
+  const w = 128//window.innerWidth// * window.devicePixelRatio
+  const h = 128//window.innerHeight// * window.devicePixelRatio
   console.log(w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h)

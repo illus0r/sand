@@ -7181,9 +7181,10 @@ class ZShaderWrapper {
         this.gl = gl96;
         this.twgl = twgl;
     }
-    createPass(frag, size) {
+    createPass(frag, size, type) {
         if (frag == null) throw Error('frag is expected');
         if (size == null) size = 8;
+        if (type == null) type = this.gl.RGBA32F;
         const resolution = Array.isArray(size) ? size : [
             size,
             size
@@ -7195,11 +7196,11 @@ class ZShaderWrapper {
     void main() {
       gl_Position = vec4(position, 0.0, 1.0);
     }`;
-        return new Pass(this.gl, this.twgl, vert, frag, resolution);
+        return new Pass(this.gl, this.twgl, vert, frag, resolution, type);
     }
 }
 class Pass {
-    constructor(gl97, twgl, vert, frag, resolution){
+    constructor(gl97, twgl, vert, frag, resolution, type){
         this.gl = gl97;
         this.twgl = twgl;
         this.resolution = resolution;
@@ -7209,7 +7210,7 @@ class Pass {
         ]);
         const attachments = [
             {
-                internalFormat: this.gl.RGBA32F
+                internalFormat: type
             }
         ];
         const buffer = this.twgl.createFramebufferInfo(this.gl, attachments, ...resolution);
@@ -7551,8 +7552,10 @@ out vec4 o;
 ${rnd + rnd2D + PI + rot + colorGradient}
 ${snoiseCommon + snoise3D}
 
+// #define tex(i,j) (floor(texture(backbuffer,fract((FC.xy+vec2(i,j))/u_resolution))*3e3)/3e3)
 #define tex(i,j) texture(backbuffer,fract((FC.xy+vec2(i,j))/u_resolution))
-#define tx(i,j) (floor(tex(i,j).a*3e3)/3e3)
+#define isZero(x) (abs(x)<.01)
+#define tx(i,j) tex(i,j).a
 #define isGround(v) (abs(v-.5)<.1) 
 #define isSand(v) (abs(v-1.)<.1)
 #define fallL(i,j) (int(f)%2==0)
@@ -7574,23 +7577,28 @@ vec3 add = vec3(.5, .5, .5);
 void main() {
 
     vec2 uv = FC.xy/u_resolution;
-    // o = tex(0,1);
-    // if(f > 10.) return;
-    // o=vec4(rnd2D(uv*99.));
+    // o = tex(1,-1);
+    // if(f > 1.) return;
+    // // o=vec4(rnd2D(uv*99.));
+    // o=vec4((int(FC.x) ^ int(FC.y)) % 9 == 0);
+    // return;
 
 
     // if(FC.y<1.){o.a=.5;return;} 
-    if(f<4. && uv.y>.99){
+    if(u_frame<1.){
         o.a = 1.;
-        o.rgb = col((uv.y-.99)/.01);  
+        o.rgb = col(uv.x);
+        o *= step(length(uv-.5),.01);
+        return;
     }
-    if(tx(0,0)==0. || isGround(tx(0,0))){
-        float noise = snoise3D(vec3(uv*8.,t*.0));  
+    if(isZero(tx(0,0)) || isGround(tx(0,0))){
+        float noise = snoise3D(vec3(uv*8.,t*.1));  
         if(noise > .3){
             o.a=.5;//floor(noise*noise*3.)/2.;
             // o.rgb+=.5;
             return;
         }
+        // if(FC.y < 1.){o.a=.5;return;}
     }
 
     // if(isGround(v)){
@@ -7601,14 +7609,14 @@ void main() {
     if(isSand(tx(0,0))){
         o=tex(0,0);
         // если снизу дырка
-        if(tx(0,-1)==0.){  
+        if(isZero(tx(0,-1))){  
             // если ничего не прилетит в эту дырку слева  
             if(isSand(tx(-1,0)) && tx(-1,-1)>0. && fallR(-1,0) && prio(0,0)< prio(-1,0)) return;
             if(isSand(tx( 1,0)) && tx( 1,-1)>0. && fallL( 1,0) && prio(0,0)<=prio( 1,0)) return;
             o.a-=1.;
         }
         // если слева дырка
-        if(tx(-1,-1)==0. && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
+        if(isZero(tx(-1,-1)) && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
             // если ничего не прилетит в эту ячейку сверху
             if(isSand(tx(-1,0)) && prio(0,0)>=prio(-1,0)) return;
             // если ничего не прилетит в эту ячейку ещё более слева
@@ -7616,7 +7624,7 @@ void main() {
             o.a-=1.;
         }
         // если справа дырка
-        if(tx(1,-1)==0. && fallR(0,0)){
+        if(isZero(tx(1,-1)) && fallR(0,0)){
             // если ничего не прилетит в эту ячейку сверху
             if(isSand(tx(1,0)) && prio(0,0)>prio(1,0)) return;
             // если ничего не прилетит в эту ячейку ещё более справа
@@ -7629,7 +7637,7 @@ void main() {
         if(isSand(tx(0,1)))
             o=tex(0,1);
         if(isSand(tx(1,1))) // справа вверху песок
-            if(tx(1,0)>0.) // он на чём-то лежит.
+            if(!isZero(tx(1,0))) // он на чём-то лежит.
             if(fallL(1,1)){ // она хочет бухнуться влево
                 o=tex(1,1);
                 if(isSand(tx(0,1)) && prio(0,1)>prio(1,1))
@@ -7638,7 +7646,7 @@ void main() {
                 o=tex(-1,1);
             }
         if(isSand(tx(-1,1))) // слева вверху песок
-            if(tx(-1,0)>0.) // он на чём-то лежит.
+            if(!isZero(tx(-1,0))) // он на чём-то лежит.
             if(fallR(-1,1)) { // она хочет бухнуться влево
             o=tex(-1,1);
                 if(isSand(tx(0,1)) && prio(0,1)>prio(-1,1))
@@ -7671,6 +7679,7 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
   vec2 uvN = gl_FragCoord.xy / u_resolution;
+  uvN = (floor(uvN*128.) + .5)/128.;
   o = texture(tex, uvN);
   // o.rgb = ACESFilm(o.rgb);
   o.rgb *= o.a;
@@ -7688,18 +7697,18 @@ __default.resizeCanvasToDisplaySize(gl.canvas);
 const zsw = new ZShaderWrapper(gl, __default);
 const passes = {
     gi: zsw.createPass(glsl, [
-        canvas.width,
-        canvas.height
-    ]),
+        128,
+        128
+    ], gl.RGBA),
     draw: zsw.createPass(glsl1)
 };
 const params = [
     ...Array(10)
 ].map(()=>Math.random()
 );
-const timeI = new Date().getSeconds();
+const timeI = new Date() / 1000;
 function draw() {
-    const time = new Date().getSeconds();
+    const time = new Date() / 1000;
     __default.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     passes.gi.draw({
@@ -7709,8 +7718,8 @@ function draw() {
         u_params: params,
         u_voxels_num: 128,
         u_resolution: [
-            canvas.width,
-            canvas.height
+            128,
+            128
         ]
     }, 'self');
     passes.draw.draw({
@@ -7729,11 +7738,11 @@ window.addEventListener('resize', (e)=>{
     resize();
 });
 function resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    console.log(w, h);
-    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h);
-    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h);
+    const w = 128;
+    const h = 128;
+    console.log(128, 128);
+    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, 128, 128);
+    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, 128, 128);
     passes.gi.resolution = [
         w,
         h
