@@ -133,7 +133,7 @@ function draw () {
 
   tick++
   console.log(tick)
-  if (tick < 1000) {
+  if (tick < 1) {
     requestAnimationFrame(draw)
   }
 }

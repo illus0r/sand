@@ -7262,7 +7262,7 @@ const PI = `
 #define PI 3.14159265
 `;
 const rnd = `
-#define rnd(x) fract(54321.987 * sin(987.12345 * x + .1))
+#define rnd(x) fract(1.1e4*sin(mod(111.1*x,3.14)+.1))
 `;
 `
 #define rnd2D(X) fract(1e5*sin(dot(mod(X,PI),vec2(9.,PI))+.1))
@@ -7401,10 +7401,10 @@ uniform sampler2D u_tex_voxels;
 ${rnd + PI + rot + colorGradient}
 #define rnd_k(_) rnd(k+floor(100.*objId)+_)
 #define EPS .001
-#define REFLECTIONS 4.
+#define REFLECTIONS 1.
 #define MAX_STEPS 200.
 #define MAX_DIST 640.
-#define UV_SCALE 64.
+#define UV_SCALE 32.
 #define SKIP_FRAMES 1
 
 out vec4 o;
@@ -7652,9 +7652,14 @@ void main() {
         if(length(light) > 0.) {
             break;
         } else {
-            rd += (rnd(length(uv) + u_frame + vec3(0, 1, 2)) * 2. - 1.) * .8;
+            rd += (rnd(length(uv) + u_frame + vec3(0, 1, 2)) * 2. - 1.) * .2;
             rd = reflect(rd, n);
             rd = normalize(rd);
+            // float i = PI;
+            // do{
+            //     rd = rnd(length(uv) + u_frame + vec3(0, 1, 2) + i) * 2. - 1.;
+            //     i+=PI;
+            // }while(length(rd)>1.);
             float g = dot(rd, n);
             rd = rd - (g - abs(g))*n;
             ro = p + n * .001;
@@ -7662,9 +7667,10 @@ void main() {
         }
     }
     col *= light;
-    o += mix(texture(backbuffer, gl_FragCoord.xy / u_resolution), col.rgbb, 1. / (floor(u_frame / float(SKIP_FRAMES)) + 1.));
-    // o += 10./i * tex;
-    // o.rgb = n * .5 + .5;
+    o.rgb = n * .5 + .5;
+    // o += mix(texture(backbuffer, gl_FragCoord.xy / u_resolution), col.rgbb, 1. / (floor(u_frame / float(SKIP_FRAMES)) + 1.));
+    o *= 80./i;
+    if(length(light)>0.) discard;
     // if(kHit == kDepthMin)
         // o *= 0.;//kHit/6.;
     o.a = 1.;
@@ -7827,7 +7833,7 @@ function draw() {
     }, 'screen');
     tick++;
     console.log(tick);
-    if (tick < 1000) {
+    if (tick < 1) {
         requestAnimationFrame(draw);
     }
 }
