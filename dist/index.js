@@ -7264,7 +7264,7 @@ const PI = `
 const rnd = `
 #define rnd(x) fract(1.1e4*sin(mod(111.1*x,3.14)+.1))
 `;
-`
+const rnd2D = `
 #define rnd2D(X) fract(1e5*sin(dot(mod(X,PI),vec2(9.,PI))+.1))
 `;
 const rot = `
@@ -7398,13 +7398,15 @@ uniform float u_frame;
 uniform float u_params[10];
 uniform sampler2D backbuffer;
 uniform sampler2D u_tex_voxels;
-${rnd + PI + rot + colorGradient}
-#define rnd_k(_) rnd(k+floor(100.*objId)+_)
+
+${rnd + rnd2D + PI + rot + colorGradient}
+
+#define rnd_k(_) rnd(k+floor(1e3*objId)+_)
 #define EPS .001
 #define REFLECTIONS 1.
 #define MAX_STEPS 200.
 #define MAX_DIST 640.
-#define UV_SCALE 32.
+#define UV_SCALE 16.
 #define SKIP_FRAMES 1
 
 out vec4 o;
@@ -7427,6 +7429,7 @@ vec4 getRelativeVoxel(vec3 p) {
 }
 
 float sdfVoxel(vec3 p) {
+    // if(floor(p.y)<0.) return -1.;
     objId = 0.;
     vec4 tx = getRelativeVoxel(p);
     objId = tx.r;
@@ -7585,29 +7588,30 @@ vec3 getLight(vec3 p) {
         // return vec3(15, 6, 5);
     // if(p.y > 26. && p.z < -0. && p.x < -0.)
         // return vec3(100, 15, 15);
-    // if(p.y > 16.)
-    //     return vec3(50, 15, 15);
+    // if(p.y > 16. && length(p.xz) < 10.)
+    //     return vec3(100);
     if(kHit == kDepthMin)
         return colorGradient(voxelId * .2 + objId, vec3(rnd(objId),rnd(objId+.1),rnd(objId+.2))) * rnd(voxelId) * rnd(voxelId) * 4.;
     return vec3(0);
 }
 
 void main() {
-    if((int(gl_FragCoord.x) ^ int(gl_FragCoord.y) + int(u_frame)) % SKIP_FRAMES > 0) {
-        o = texture(backbuffer, gl_FragCoord.xy / u_resolution);
-        return;
-    }
+    // if((int(gl_FragCoord.x) ^ int(gl_FragCoord.y) + int(u_frame)) % SKIP_FRAMES > 0) {
+    //     o = texture(backbuffer, gl_FragCoord.xy / u_resolution);
+    //     return;
+    // }
 
     float i, d, e, rfl, l;
 
-    vec2 uv = (gl_FragCoord.xy + rnd(length(mod(vec3(gl_FragCoord.xy, u_time), 3.141592))) - .5 - u_resolution * .5) / u_resolution.y + .001;
+    vec2 uv = (gl_FragCoord.xy * 2. - u_resolution) / min(u_resolution.x, u_resolution.y);
+    uv += rnd2D(gl_FragCoord.xy+vec2(0,1.1)+u_frame)/u_resolution;
     vec3 rd = (vec3(0, 0, 1)), ro, p;
     ro.xz = uv * UV_SCALE;
-    ro.y = 30.;
+    ro.y = 16.;
     rd.yz *= rot(atan(1. / sqrt(2.)));
-    rd.xz *= rot(3.1415 / 4.);
+    rd.xz *= rot(PI / 4.);
     ro.x /= sqrt(3.);
-    ro.xz *= rot(3.1415 / 4.);
+    ro.xz *= rot(PI / 4.);
 
     vec3 light;
 
@@ -7653,6 +7657,12 @@ void main() {
             break;
         } else {
             rd += (rnd(length(uv) + u_frame + vec3(0, 1, 2)) * 2. - 1.) * .2;
+            // rd += normalize((rnd(dot(uv,vec2(1,PI)) + u_frame + rfl + vec3(0, .1, .2)) * 2. - 1.)) * rnd2D(uv*99.);
+            // vec3 drd = vec3(8.*rnd2D(uv*99.),0,0);
+            // drd.xz *= rot(rnd2D(uv*99.)*2.*PI);
+            // drd.xy *= rot(rnd2D(uv*90.)*2.*PI);
+            // drd.xz *= rot(rnd2D(uv*80.)*2.*PI);
+            // rd += drd;
             rd = reflect(rd, n);
             rd = normalize(rd);
             // float i = PI;
@@ -7673,7 +7683,7 @@ void main() {
     if(length(light)>0.) discard;
     // if(kHit == kDepthMin)
         // o *= 0.;//kHit/6.;
-    o.a = 1.;
+    // o.a = 1.;
 
     // if(p.y < -64.) 
     // o = vec4(1,0,0,1);
@@ -7689,10 +7699,19 @@ uniform float u_time;
 
 out vec4 o;
 
+vec3 ACESFilm(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0., 1.);
+}
+
 void main() {
   vec2 uvN = gl_FragCoord.xy / u_resolution;
-  o = texture(tex, uvN);
-  // o.a = 1.;
+  o.rgb = ACESFilm(texture(tex, uvN).rgb);
+  o.a = 1.;
 }
 `;
 const canvas = document.getElementById('canvasgl');
@@ -7842,13 +7861,14 @@ window.addEventListener('resize', (e)=>{
     resize();
 });
 function resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const w = window.innerWidth * window.devicePixelRatio;
+    const h = window.innerHeight * window.devicePixelRatio;
     __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h);
     __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h);
     passes.gi.resolution = [
         w,
         h
     ];
+    tick = 0;
 }
 resize();

@@ -145,10 +145,11 @@ window.addEventListener('resize', (e) => {
 })
 
 function resize () {
-  const w = window.innerWidth // FIXME * window.devicePixelRatio
-  const h = window.innerHeight // FIXME * window.devicePixelRatio
+  const w = window.innerWidth * window.devicePixelRatio
+  const h = window.innerHeight * window.devicePixelRatio
   twgl.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h)
   passes.gi.resolution = [w, h]
+  tick = 0
 }
 resize()
