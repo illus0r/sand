@@ -2,7 +2,7 @@ export let glsl = /*glsl*/`#version 300 es
 precision highp float;
 uniform vec2 u_resolution;
 uniform vec2 u_tex_res;
-uniform sampler2D tex;
+uniform sampler2D u_tex;
 // uniform sampler2D backbuffer;
 uniform float u_time;
 
@@ -19,10 +19,11 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
   vec2 uvN = gl_FragCoord.xy / u_resolution;
-  uvN = (floor(uvN*128.) + .5)/128.;
-  o = texture(tex, uvN);
+  uvN = (floor(uvN*u_tex_res) + .5)/u_tex_res;
+  o = texture(u_tex, uvN);
   // o.rgb = ACESFilm(o.rgb);
   o.rgb *= o.a;
+  if(abs(o.a-.5)<.01) o.r = mod(gl_FragCoord.y+gl_FragCoord.x, 4.)/4.;
   o.a = 1.;
 }
 `

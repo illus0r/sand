@@ -55,17 +55,18 @@ function draw () {
 
   passes.gi.draw({
     u_frame: tick,
-    tex: passes.gi.b,
+    u_tex: passes.gi.b,
     u_time: time - timeI,
     u_params: params,
     // u_tex_voxels: texVoxels,
     u_voxels_num: voxelsNum,
-    u_resolution: [128,128],
+    // u_resolution: [128,128],
   }, 'self')
 
   passes.draw.draw({
-    tex: passes.gi.b,
+    u_tex: passes.gi.b,
     u_resolution: [canvas.width, canvas.height],
+    u_tex_res: passes.gi.resolution,
   }, 'screen')
 
   tick++
@@ -83,8 +84,8 @@ window.addEventListener('resize', (e) => {
 })
 
 function resize () {
-  const w = 128//window.innerWidth// * window.devicePixelRatio
   const h = 128//window.innerHeight// * window.devicePixelRatio
+  const w = Math.floor(h * window.innerWidth / window.innerHeight)// * window.devicePixelRatio
   console.log(w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, h)
   twgl.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, h)

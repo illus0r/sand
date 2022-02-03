@@ -3,7 +3,7 @@ import * as g from './zModules/glsl.js'
 export let glsl = /*glsl*/`#version 300 es
 precision highp float;
 uniform vec2 u_resolution;
-uniform vec2 mouse;
+uniform vec2 u_mouse;
 uniform float u_voxels_num;
 uniform float u_time;
 uniform float u_frame;
@@ -22,7 +22,7 @@ ${ g.snoiseCommon + g.snoise3D + g.fsnoise }
 #define isSand(v) (abs(v-1.)<.1)
 #define fallL(i,j) (int(f)%2==0)
 #define fallR(i,j) !fallL(i,j)  
-#define prio(i,j) fsnoise(uv+vec2(i,j)-t)     
+#define prio(i,j) fsnoise(uv+vec2(i,j)-t)
 
 // #define prio(i,j) sin(uv.x+float(i)-t)   
 // #define prio(i,j) sin(FC.x+i*.1+t)
@@ -32,6 +32,10 @@ ${ g.snoiseCommon + g.snoise3D + g.fsnoise }
 #define t u_time
 #define FC gl_FragCoord
 
+bool plannedToBeGround(vec2 uv){
+    return snoise3D(vec3(uv.xy*8.,t*.1)) > .5;
+}
+
 void main() {
 
 #define col(c) (c-cos((c + off) * 2. * PI) * mul + add)
@@ -40,29 +44,18 @@ vec3 mul = vec3(.5, .5, .5);
 vec3 add = vec3(.5, .5, .5);
 
 vec2 uv = FC.xy/u_resolution;
-  // if(FC.y<1.){o.a=.5;return;} 
-// if(f<4. && uv.y>.3){ 
-//   o.a = 1.;
-//   o.rgb = col((uv.y-.3)/.7);  
-// }
-if(f<1. && length(uv-.5)<.02){
+
+if(f<1. && length(uv-.501)<.2){
   o.a = 1.;
-  o.rgb = col(length(uv-.5)/.02);
+  o.rgb += 1.;
   return;
-}
-if(tx(0,0)==0. || isGround(tx(0,0))){
-  float noise = snoise3D(vec3(uv*8.,t*.1));
-  if(noise > .5){
-  o.a=.5;//floor(noise*noise*3.)/2.;
-  // o.rgb+=.5;
-  return;
-  }
 }
 
-// if(isGround(v)){
-//   o+=.5;
-//   return;
-// }
+if(isGround(tx(0,0))){
+    if(plannedToBeGround(uv))
+        o.a=.5;
+    return;
+}
 
 if(isSand(tx(0,0))){
   o=tex(0,0);
@@ -91,27 +84,32 @@ if(isSand(tx(0,0))){
   }
 }
 else{
-  // if(distance(uv,m)<.1)o.a=1.,o.rgb=col(fract(t*.1)).rgb;
-  if(isSand(tx(0,1)))
+    // if(distance(uv,m)<.1)o.a=1.,o.rgb=col(fract(t*.1)).rgb;
+    if(isSand(tx(0,1)))
     o=tex(0,1);
-  if(isSand(tx(1,1))) // справа вверху песок
+    if(isSand(tx(1,1))) // справа вверху песок
     if(tx(1,0)>0.) // он на чём-то лежит.
-      if(fallL(1,1)){ // она хочет бухнуться влево
+        if(fallL(1,1)){ // она хочет бухнуться влево
         o=tex(1,1);
         if(isSand(tx(0,1)) && prio(0,1)>prio(1,1))
-          o=tex(0,1);
+            o=tex(0,1);
         if(isSand(tx(-1,1)) && prio(-1,1)>prio(1,1))
-          o=tex(-1,1);
-      }
-  if(isSand(tx(-1,1))) // слева вверху песок
+            o=tex(-1,1);
+        }
+    if(isSand(tx(-1,1))) // слева вверху песок
     if(tx(-1,0)>0.) // он на чём-то лежит.
-      if(fallR(-1,1)) { // она хочет бухнуться влево
-       o=tex(-1,1);
+        if(fallR(-1,1)) { // она хочет бухнуться влево
+        o=tex(-1,1);
         if(isSand(tx(0,1)) && prio(0,1)>prio(-1,1))
-          o=tex(0,1);
+            o=tex(0,1);
         if(isSand(tx(1,1)) && prio(1,1)>prio(-1,1))
-          o=tex(1,1);
-      }
+            o=tex(1,1);
+        }
     }
- }
+
+    if(o.a==0.){
+        if(plannedToBeGround(uv))
+            o.a=.5;
+    }
+}
 `

@@ -7543,7 +7543,7 @@ float fsnoise (vec2 c){return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5
 let glsl = `#version 300 es
 precision highp float;
 uniform vec2 u_resolution;
-uniform vec2 mouse;
+uniform vec2 u_mouse;
 uniform float u_voxels_num;
 uniform float u_time;
 uniform float u_frame;
@@ -7562,7 +7562,7 @@ ${snoiseCommon + snoise3D + fsnoise}
 #define isSand(v) (abs(v-1.)<.1)
 #define fallL(i,j) (int(f)%2==0)
 #define fallR(i,j) !fallL(i,j)  
-#define prio(i,j) fsnoise(uv+vec2(i,j)-t)     
+#define prio(i,j) fsnoise(uv+vec2(i,j)-t)
 
 // #define prio(i,j) sin(uv.x+float(i)-t)   
 // #define prio(i,j) sin(FC.x+i*.1+t)
@@ -7572,6 +7572,10 @@ ${snoiseCommon + snoise3D + fsnoise}
 #define t u_time
 #define FC gl_FragCoord
 
+bool plannedToBeGround(vec2 uv){
+    return snoise3D(vec3(uv.xy*8.,t*.1)) > .5;
+}
+
 void main() {
 
 #define col(c) (c-cos((c + off) * 2. * PI) * mul + add)
@@ -7580,29 +7584,18 @@ vec3 mul = vec3(.5, .5, .5);
 vec3 add = vec3(.5, .5, .5);
 
 vec2 uv = FC.xy/u_resolution;
-  // if(FC.y<1.){o.a=.5;return;} 
-// if(f<4. && uv.y>.3){ 
-//   o.a = 1.;
-//   o.rgb = col((uv.y-.3)/.7);  
-// }
-if(f<1. && length(uv-.5)<.02){
+
+if(f<1. && length(uv-.501)<.2){
   o.a = 1.;
-  o.rgb = col(length(uv-.5)/.02);
+  o.rgb += 1.;
   return;
-}
-if(tx(0,0)==0. || isGround(tx(0,0))){
-  float noise = snoise3D(vec3(uv*8.,t*.1));
-  if(noise > .5){
-  o.a=.5;//floor(noise*noise*3.)/2.;
-  // o.rgb+=.5;
-  return;
-  }
 }
 
-// if(isGround(v)){
-//   o+=.5;
-//   return;
-// }
+if(isGround(tx(0,0))){
+    if(plannedToBeGround(uv))
+        o.a=.5;
+    return;
+}
 
 if(isSand(tx(0,0))){
   o=tex(0,0);
@@ -7631,35 +7624,40 @@ if(isSand(tx(0,0))){
   }
 }
 else{
-  // if(distance(uv,m)<.1)o.a=1.,o.rgb=col(fract(t*.1)).rgb;
-  if(isSand(tx(0,1)))
+    // if(distance(uv,m)<.1)o.a=1.,o.rgb=col(fract(t*.1)).rgb;
+    if(isSand(tx(0,1)))
     o=tex(0,1);
-  if(isSand(tx(1,1))) // справа вверху песок
+    if(isSand(tx(1,1))) // справа вверху песок
     if(tx(1,0)>0.) // он на чём-то лежит.
-      if(fallL(1,1)){ // она хочет бухнуться влево
+        if(fallL(1,1)){ // она хочет бухнуться влево
         o=tex(1,1);
         if(isSand(tx(0,1)) && prio(0,1)>prio(1,1))
-          o=tex(0,1);
+            o=tex(0,1);
         if(isSand(tx(-1,1)) && prio(-1,1)>prio(1,1))
-          o=tex(-1,1);
-      }
-  if(isSand(tx(-1,1))) // слева вверху песок
+            o=tex(-1,1);
+        }
+    if(isSand(tx(-1,1))) // слева вверху песок
     if(tx(-1,0)>0.) // он на чём-то лежит.
-      if(fallR(-1,1)) { // она хочет бухнуться влево
-       o=tex(-1,1);
+        if(fallR(-1,1)) { // она хочет бухнуться влево
+        o=tex(-1,1);
         if(isSand(tx(0,1)) && prio(0,1)>prio(-1,1))
-          o=tex(0,1);
+            o=tex(0,1);
         if(isSand(tx(1,1)) && prio(1,1)>prio(-1,1))
-          o=tex(1,1);
-      }
+            o=tex(1,1);
+        }
     }
- }
+
+    if(o.a==0.){
+        if(plannedToBeGround(uv))
+            o.a=.5;
+    }
+}
 `;
 let glsl1 = `#version 300 es
 precision highp float;
 uniform vec2 u_resolution;
 uniform vec2 u_tex_res;
-uniform sampler2D tex;
+uniform sampler2D u_tex;
 // uniform sampler2D backbuffer;
 uniform float u_time;
 
@@ -7676,10 +7674,11 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
   vec2 uvN = gl_FragCoord.xy / u_resolution;
-  uvN = (floor(uvN*128.) + .5)/128.;
-  o = texture(tex, uvN);
+  uvN = (floor(uvN*u_tex_res) + .5)/u_tex_res;
+  o = texture(u_tex, uvN);
   // o.rgb = ACESFilm(o.rgb);
   o.rgb *= o.a;
+  if(abs(o.a-.5)<.01) o.r = mod(gl_FragCoord.y+gl_FragCoord.x, 4.)/4.;
   o.a = 1.;
 }
 `;
@@ -7710,21 +7709,18 @@ function draw() {
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     passes.gi.draw({
         u_frame: tick,
-        tex: passes.gi.b,
+        u_tex: passes.gi.b,
         u_time: time - timeI,
         u_params: params,
-        u_voxels_num: 128,
-        u_resolution: [
-            128,
-            128
-        ]
+        u_voxels_num: 128
     }, 'self');
     passes.draw.draw({
-        tex: passes.gi.b,
+        u_tex: passes.gi.b,
         u_resolution: [
             canvas.width,
             canvas.height
-        ]
+        ],
+        u_tex_res: passes.gi.resolution
     }, 'screen');
     tick++;
     console.log(tick);
@@ -7735,11 +7731,11 @@ window.addEventListener('resize', (e)=>{
     resize();
 });
 function resize() {
-    const w = 128;
     const h = 128;
-    console.log(128, 128);
-    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, 128, 128);
-    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, 128, 128);
+    const w = Math.floor(128 * window.innerWidth / window.innerHeight);
+    console.log(w, 128);
+    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, 128);
+    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, 128);
     passes.gi.resolution = [
         w,
         h
