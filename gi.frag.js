@@ -10,294 +10,107 @@ uniform float u_frame;
 uniform float u_params[10];
 uniform sampler2D backbuffer;
 uniform sampler2D u_tex_voxels;
-
-${ g.rnd + g.rnd2D + g.PI + g.rot + g.colorGradient }
-
-#define rnd_k(_) rnd(k+floor(1e3*objId)+_)
-#define EPS .001
-#define REFLECTIONS 1.
-#define MAX_STEPS 200.
-#define MAX_DIST 640.
-#define UV_SCALE 16.
-#define SKIP_FRAMES 1
-
 out vec4 o;
 
-float objId = 0.;
-vec3 col = vec3(1); // accumulated color
-int side = 0; // side of the building
+${ g.rnd + g.rnd2D + g.PI + g.rot + g.colorGradient }
+${ g.snoiseCommon + g.snoise3D }
 
-float kDepthMin; // # of the smallest rib
-float depthMin = 999.; // depth of the smalles rib
-float kHit = 0.; // # of the rib the ray hit
-float voxelId;
-bool isRoof;
+#define tex(i,j) texture(backbuffer,fract((FC.xy+vec2(i,j))/u_resolution))
+#define tx(i,j) (floor(tex(i,j).a*3e3)/3e3)
+#define isGround(v) (abs(v-.5)<.1) 
+#define isSand(v) (abs(v-1.)<.1)
+#define fallL(i,j) (int(f)%2==0)
+#define fallR(i,j) !fallL(i,j)  
+#define prio(i,j) rnd2D(uv+vec2(i,j)-t)
+// #define prio(i,j) sin(uv.x+float(i)-t)   
+// #define prio(i,j) sin(FC.x+i*.1+t)
+// #define prio(i,j) ((FC.x)*(mod(f,2.)*2.-1.)+float(i))
 
-vec4 getRelativeVoxel(vec3 p) {
-    p = floor(p / 2.);
-    vec3 pTex = p + u_voxels_num / 2.; // FIXME pass N as uniform
-    vec2 uvTex = vec2(pTex.x, pTex.y + u_voxels_num * pTex.z) / vec2(u_voxels_num, u_voxels_num * u_voxels_num);  // FIXME pass N as uniform
-    return texture(u_tex_voxels, uvTex);
-}
+#define col(c) (c-cos((c + off) * 2. * PI) * mul + add)
+vec3 off = vec3(.0, .2, .3);
+vec3 mul = vec3(.5, .5, .5);
+vec3 add = vec3(.5, .5, .5);
 
-float sdfVoxel(vec3 p) {
-    // if(floor(p.y)<0.) return -1.;
-    objId = 0.;
-    vec4 tx = getRelativeVoxel(p);
-    objId = tx.r;
-    if(tx.r > 0.) { // voxel is full
-        bool b = getRelativeVoxel(p + vec3(0, 0, 1)).r > 0.;
-        bool r = getRelativeVoxel(p + vec3(1, 0, 0)).r > 0.;
-        bool f = getRelativeVoxel(p + vec3(0, 0, -1)).r > 0.;
-        bool l = getRelativeVoxel(p + vec3(-1, 0, 0)).r > 0.;
-        bool br = getRelativeVoxel(p + vec3(1, 0, 1)).r > 0.;
-        bool rf = getRelativeVoxel(p + vec3(1, 0, -1)).r > 0.;
-        bool fl = getRelativeVoxel(p + vec3(-1, 0, -1)).r > 0.;
-        bool lb = getRelativeVoxel(p + vec3(-1, 0, 1)).r > 0.;
-        isRoof = getRelativeVoxel(p + vec3(0, 1, 0)).r == 0.;
-
-        if(false);
-        else if(!b && r && f && l)     // b    1
-            side = 1;
-        else if(b && !r && f && l)     // r    2
-            side = 2;
-        else if(b && r && !f && l)     // f    3
-            side = 3;
-        else if(b && r && f && !l)     // l    4
-            side = 4;
-        else if(!b && !r && f && l)    // br   5
-            side = 5;
-        else if(b && !r && !f && l)    // rf   6
-            side = 6;
-        else if(b && r && !f && !l)    // fl   7
-            side = 7;
-        else if(!b && r && f && !l)    // lb   8
-            side = 8;
-        else if(!br)                   // bri  9
-            side = 9;
-        else if(!rf)                   // rfi 10
-            side = 10;
-        else if(!fl)                   // fli 11
-            side = 11;
-        else if(!lb)                   // lbi 12
-            side = 12;
-        else                           // c    0
-            side = 0;
-    }
-
-    float res = .5 - step(1e-4, tx.r);
-
-    voxelId = rnd(dot(floor(p), vec3(13, 17, 19)));
-    return res;
-}
-
-float sdf(vec3 p) {
-    float boundingBox = length(p - clamp(p, -.4999, .4999)) - .0001;
-    float res;
-
-    switch(side) {
-        case 0:
-            kHit = -1.;
-            if(isRoof) return 999.;
-            else return boundingBox;
-        case 1: // b
-            p.xz *= rot(PI);
-            break;
-        case 2: // r
-            p.xz *= rot(-PI / 2.);
-            break;
-        case 3: // f
-            break;
-        case 4: // l
-            p.xz *= rot(PI / 2.);
-            break;
-        case 5: // br
-            p.xz = -p.xz;
-            if(p.x < p.z)
-                p.xz = p.zx;
-            break;
-        case 6: // rf
-            p.x = -p.x;
-            if(p.x < p.z)
-                p.xz = p.zx;
-            break;
-        case 7: // fl
-            if(p.x < p.z)
-                p.xz = p.zx;
-            break;
-        case 8: // lb
-            p.z = -p.z;
-            if(p.x < p.z)
-                p.xz = p.zx;
-            break;
-        case 9: // bri
-            p.xz = -p.xz;
-            if(p.x > p.z)
-                p.xz = p.zx;
-            break;
-        case 10: // rfi
-            p.x = -p.x;
-            if(p.x > p.z)
-                p.xz = p.zx;
-            break;
-        case 11: // fli
-            if(p.x > p.z)
-                p.xz = p.zx;
-            break;
-        case 12: // lbi
-            p.z = -p.z;
-            if(p.x > p.z)
-                p.xz = p.zx;
-            break;
-    }
-
-    kHit = 0.;
-    kDepthMin = 0.;
-
-    float c = -p.z;
-
-    for(float k = 1.; k < 6.; k++) {
-        p.xy = p.yx;
-        float period = 2. * (rnd_k(.3) * .8 + .2);
-        if(k <= 2.)
-            period = 1.;
-        p.y = mod(p.y, period) - period * .5;
-        vec3 p1 = p;
-        p1.x = 0.;
-        float width = rnd_k(.1) * period * .1 + .04;
-        float depth = pow(rnd_k(.2), 1.) * .4 + .05;
-        if(depth < depthMin) {
-            // discard;
-            depthMin = depth;
-            kDepthMin = k;
-        }
-        p1.y -= clamp(p1.y, -width * .5, width * .5); // width
-        p1.z -= clamp(p1.z, -depth, .0); // depth
-
-        float cNew = length(p1) - .0001;
-        if(cNew < c) {
-            c = cNew;
-            kHit = -1.;
-        }
-    }
-    if(isRoof && c < p.z+.1) {
-        c = p.z+.1;
-        kHit = -1.;
-    }
-
-    if(c > boundingBox) {
-        return c;
-    } else {
-        kHit = -1.;
-        return boundingBox;
-    }
-}
-
-${ g.norm } // calculated from sdf(p)
-
-vec3 getLight(vec3 p) {
-    // if(p.y > 30. && p.z > 0. && p.x > 0.)
-        // return vec3(15, 6, 5);
-    // if(p.y > 26. && p.z < -0. && p.x < -0.)
-        // return vec3(100, 15, 15);
-    // if(p.y > 16. && length(p.xz) < 10.)
-    //     return vec3(100);
-    if(kHit == kDepthMin)
-        return colorGradient(voxelId * .2 + objId, vec3(rnd(objId),rnd(objId+.1),rnd(objId+.2))) * rnd(voxelId) * rnd(voxelId) * 4.;
-    return vec3(0);
-}
+#define f u_frame
+#define t u_time
+#define FC gl_FragCoord
 
 void main() {
-    // if((int(gl_FragCoord.x) ^ int(gl_FragCoord.y) + int(u_frame)) % SKIP_FRAMES > 0) {
-    //     o = texture(backbuffer, gl_FragCoord.xy / u_resolution);
-    //     return;
-    // }
 
-    float i, d, e, rfl, l;
+    vec2 uv = FC.xy/u_resolution;
+    // o = tex(0,1);
+    // if(f > 10.) return;
+    // o=vec4(rnd2D(uv*99.));
 
-    vec2 uv = (gl_FragCoord.xy * 2. - u_resolution) / min(u_resolution.x, u_resolution.y);
-    uv += rnd2D(gl_FragCoord.xy+vec2(0,1.1)+u_frame)/u_resolution;
-    vec3 rd = (vec3(0, 0, 1)), ro, p;
-    ro.xz = uv * UV_SCALE;
-    ro.y = 16.;
-    rd.yz *= rot(atan(1. / sqrt(2.)));
-    rd.xz *= rot(PI / 4.);
-    ro.x /= sqrt(3.);
-    ro.xz *= rot(PI / 4.);
 
-    vec3 light;
-
-    vec3 n;
-    for(; rfl++ < REFLECTIONS;) {
-        d = 0.;
-        for(i = 0.; i++ < MAX_STEPS;) {
-            p = ro + rd * d;
-            vec3 dp = (step(0., rd) - fract(p)) / rd;
-            float dpmin;
-
-            dpmin = min(min(dp.x, dp.y), dp.z) + 1e-4;
-
-            bool breaker = false;
-            if(sdfVoxel(p) < 0.) {
-                float ddd = 0.;
-                for(float stepsWithnVoxel; stepsWithnVoxel++ < 100.;) {
-                    p = ro + rd * (d + ddd);
-                    ddd += e = sdf(fract(p) - .5);
-                    if(e < EPS || ++i > MAX_STEPS) {
-                        n = norm(fract(p) - .5);
-                        dpmin = ddd;
-                        breaker = true;
-                        break;
-                    }
-                    if(ddd > dpmin) { // улетели в соседнюю клетку
-                        break;
-                    }
-                }
-            }
-
-            d += dpmin;
-
-            if(breaker == true)
-                break;
-
-        }
-        if(d > MAX_DIST) {
-            break;
-        }
-        light = getLight(p);
-        if(length(light) > 0.) {
-            break;
-        } else {
-            rd += (rnd(length(uv) + u_frame + vec3(0, 1, 2)) * 2. - 1.) * .2;
-            // rd += normalize((rnd(dot(uv,vec2(1,PI)) + u_frame + rfl + vec3(0, .1, .2)) * 2. - 1.)) * rnd2D(uv*99.);
-            // vec3 drd = vec3(8.*rnd2D(uv*99.),0,0);
-            // drd.xz *= rot(rnd2D(uv*99.)*2.*PI);
-            // drd.xy *= rot(rnd2D(uv*90.)*2.*PI);
-            // drd.xz *= rot(rnd2D(uv*80.)*2.*PI);
-            // rd += drd;
-            rd = reflect(rd, n);
-            rd = normalize(rd);
-            // float i = PI;
-            // do{
-            //     rd = rnd(length(uv) + u_frame + vec3(0, 1, 2) + i) * 2. - 1.;
-            //     i+=PI;
-            // }while(length(rd)>1.);
-            float g = dot(rd, n);
-            rd = rd - (g - abs(g))*n;
-            ro = p + n * .001;
-            col *= .9;
+    // if(FC.y<1.){o.a=.5;return;} 
+    if(f<4. && uv.y>.99){
+        o.a = 1.;
+        o.rgb = col((uv.y-.99)/.01);  
+    }
+    if(tx(0,0)==0. || isGround(tx(0,0))){
+        float noise = snoise3D(vec3(uv*8.,t*.0));  
+        if(noise > .3){
+            o.a=.5;//floor(noise*noise*3.)/2.;
+            // o.rgb+=.5;
+            return;
         }
     }
-    col *= light;
-    o.rgb = n * .5 + .5;
-    // o += mix(texture(backbuffer, gl_FragCoord.xy / u_resolution), col.rgbb, 1. / (floor(u_frame / float(SKIP_FRAMES)) + 1.));
-    o *= 80./i;
-    if(length(light)>0.) discard;
-    // if(kHit == kDepthMin)
-        // o *= 0.;//kHit/6.;
-    // o.a = 1.;
 
-    // if(p.y < -64.) 
+    // if(isGround(v)){
+    //   o+=.5;
+    //   return;
+    // }
+
+    if(isSand(tx(0,0))){
+        o=tex(0,0);
+        // если снизу дырка
+        if(tx(0,-1)==0.){  
+            // если ничего не прилетит в эту дырку слева  
+            if(isSand(tx(-1,0)) && tx(-1,-1)>0. && fallR(-1,0) && prio(0,0)< prio(-1,0)) return;
+            if(isSand(tx( 1,0)) && tx( 1,-1)>0. && fallL( 1,0) && prio(0,0)<=prio( 1,0)) return;
+            o.a-=1.;
+        }
+        // если слева дырка
+        if(tx(-1,-1)==0. && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
+            // если ничего не прилетит в эту ячейку сверху
+            if(isSand(tx(-1,0)) && prio(0,0)>=prio(-1,0)) return;
+            // если ничего не прилетит в эту ячейку ещё более слева
+            if(isSand(tx(-2,0)) && tx(-2,-1)>0. && fallR(-2,0) && prio(0,0)<prio(-2,0)) return;
+            o.a-=1.;
+        }
+        // если справа дырка
+        if(tx(1,-1)==0. && fallR(0,0)){
+            // если ничего не прилетит в эту ячейку сверху
+            if(isSand(tx(1,0)) && prio(0,0)>prio(1,0)) return;
+            // если ничего не прилетит в эту ячейку ещё более справа
+            if(isSand(tx(2,0)) && tx(2,-1)>0. && fallL(2,0) && prio(0,0)<=prio(2,0)) return; 
+            o.a-=1.;
+        }
+    }
+    else{
+        // if(distance(uv,m)<.1)o.a=1.,o.rgb=col(fract(t*.1)).rgb;
+        if(isSand(tx(0,1)))
+            o=tex(0,1);
+        if(isSand(tx(1,1))) // справа вверху песок
+            if(tx(1,0)>0.) // он на чём-то лежит.
+            if(fallL(1,1)){ // она хочет бухнуться влево
+                o=tex(1,1);
+                if(isSand(tx(0,1)) && prio(0,1)>prio(1,1))
+                o=tex(0,1);
+                if(isSand(tx(-1,1)) && prio(-1,1)>prio(1,1))
+                o=tex(-1,1);
+            }
+        if(isSand(tx(-1,1))) // слева вверху песок
+            if(tx(-1,0)>0.) // он на чём-то лежит.
+            if(fallR(-1,1)) { // она хочет бухнуться влево
+            o=tex(-1,1);
+                if(isSand(tx(0,1)) && prio(0,1)>prio(-1,1))
+                o=tex(0,1);
+                if(isSand(tx(1,1)) && prio(1,1)>prio(-1,1))
+                o=tex(1,1);
+            }
+    }
     // o = vec4(1,0,0,1);
 }
 `
