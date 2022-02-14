@@ -7704,21 +7704,23 @@ void main() {
     if(above.a > .9){
       o.rgb = color(above.r);
     }
+
+    float sum = 0.;
+    for(float R = 0.; R < 4.; R++){
+      vec4 probe;
+      probe = texture(u_tex, uvN+vec2(0,R)/u_tex_res);
+      if(probe.a>.9) sum += min(1., .002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+      probe = texture(u_tex, uvN+vec2(0,-R)/u_tex_res);
+      if(probe.a>.9) sum += min(1., .002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+      probe = texture(u_tex, uvN+vec2(R,0)/u_tex_res);
+      if(probe.a>.9) sum += min(1., .002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+      probe = texture(u_tex, uvN+vec2(-R,0)/u_tex_res);
+      if(probe.a>.9) sum += min(1., .002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+    }
+    // o+=sum;
+    o+=step(.4, sum);
+  
   }
-  float sum = 0.;
-  for(float R = 0.; R < 2.; R++){
-    vec4 probe;
-    probe = texture(u_tex, uvN+vec2(0,R)/u_tex_res);
-    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
-    probe = texture(u_tex, uvN+vec2(0,-R)/u_tex_res);
-    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
-    probe = texture(u_tex, uvN+vec2(R,0)/u_tex_res);
-    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
-    probe = texture(u_tex, uvN+vec2(-R,0)/u_tex_res);
-    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
-  }
-// o+=sum;
-o+=step(.4, sum);
 
 
   o.a = 1.;
