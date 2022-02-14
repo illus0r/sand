@@ -7572,27 +7572,30 @@ ${snoiseCommon + snoise3D + fsnoise}
 #define t u_time
 #define FC gl_FragCoord
 
-bool plannedToBeGround(vec2 uv){
-    return snoise3D(vec3(uv.xy*8.,t*.1)) > .5;
+bool plannedToBeGround(vec2 uv,float frame){
+    return snoise3D(vec3(uv*vec2(2,40),t*.01)) > .7;
+    // return 0.>sin(frame-1.+uv.x);
 }
 
 void main() {
 
 #define col(c) (c-cos((c + off) * 2. * PI) * mul + add)
-vec3 off = vec3(.0, .2, .3);
+vec3 off = vec3(.0, .3, .4);
 vec3 mul = vec3(.5, .5, .5);
 vec3 add = vec3(.5, .5, .5);
 
 vec2 uv = FC.xy/u_resolution;
 
-if(f<1. && length(uv-.501)<.2){
-  o.a = 1.;
-  o.rgb += 1.;
-  return;
+// spawning
+if(f<1. && length(uv-.501)<.3){
+    o.a = 1.;
+    o.rgb = vec3(fract(rnd2D(uv*100.+10.) + uv.x * 100.));
+    return;
 }
 
+// земля останется землёй
 if(isGround(tx(0,0))){
-    if(plannedToBeGround(uv))
+    if(plannedToBeGround(uv, u_frame))
         o.a=.5;
     return;
 }
@@ -7604,7 +7607,7 @@ if(isSand(tx(0,0))){
     // если ничего не прилетит в эту дырку слева  
     if(isSand(tx(-1,0)) && tx(-1,-1)>0. && fallR(-1,0) && prio(0,0)< prio(-1,0)) return;
     if(isSand(tx( 1,0)) && tx( 1,-1)>0. && fallL( 1,0) && prio(0,0)<=prio( 1,0)) return;
-    o.a-=1.; 
+    o.a=.0; 
   }
   // если слева дырка
   if(tx(-1,-1)==0. && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
@@ -7612,7 +7615,7 @@ if(isSand(tx(0,0))){
     if(isSand(tx(-1,0)) && prio(0,0)>=prio(-1,0)) return;
     // если ничего не прилетит в эту ячейку ещё более слева
     if(isSand(tx(-2,0)) && tx(-2,-1)>0. && fallR(-2,0) && prio(0,0)<prio(-2,0)) return;
-    o.a-=1.;
+    o.a=.0; 
   }
   // если справа дырка
   if(tx(1,-1)==0. && fallR(0,0)){
@@ -7620,7 +7623,7 @@ if(isSand(tx(0,0))){
     if(isSand(tx(1,0)) && prio(0,0)>prio(1,0)) return;
     // если ничего не прилетит в эту ячейку ещё более справа
     if(isSand(tx(2,0)) && tx(2,-1)>0. && fallL(2,0) && prio(0,0)<=prio(2,0)) return; 
-    o.a-=1.;
+    o.a=.0; 
   }
 }
 else{
@@ -7648,7 +7651,7 @@ else{
     }
 
     if(o.a==0.){
-        if(plannedToBeGround(uv))
+        if(plannedToBeGround(uv, u_frame))
             o.a=.5;
     }
 }
@@ -7658,28 +7661,68 @@ precision highp float;
 uniform vec2 u_resolution;
 uniform vec2 u_tex_res;
 uniform sampler2D u_tex;
-// uniform sampler2D backbuffer;
+uniform sampler2D backbuffer;
 uniform float u_time;
 
 out vec4 o;
 
-vec3 ACESFilm(vec3 x) {
-  const float a = 2.51;
-  const float b = 0.03;
-  const float c = 2.43;
-  const float d = 0.59;
-  const float e = 0.14;
-  return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0., 1.);
+
+vec3 color(float x){
+  x = clamp(x,0.,1.);
+  float c = x/2. + .25;
+  return vec3(c*1.9,c*.8,c*.2);
 }
 
+${rnd + PI}
+${rnd2D}
+
 void main() {
-  vec2 uvN = gl_FragCoord.xy / u_resolution;
+  vec2 uvN = gl_FragCoord.xy / u_tex_res;
+  // if(u_time<1.){
+  //   o += sin(gl_FragCoord.x*.1) * .5 + .5;
+  //   o.a = 1.;
+  // }
+  // else {
+  //   o = vec4(uvN,0,1);//texture(backbuffer, uvN);
+  // }
+  // return;
+
+
+
   uvN = (floor(uvN*u_tex_res) + .5)/u_tex_res;
   o = texture(u_tex, uvN);
-  // o.rgb = ACESFilm(o.rgb);
+  if(abs(o.a-.5) < .01){
+    discard;
+  }
   o.rgb *= o.a;
   if(abs(o.a-.5)<.01) o.r = mod(gl_FragCoord.y+gl_FragCoord.x, 4.)/4.;
+  if(o.a > .9){
+    o.rgb = color(o.r);
+  }
+  if(o.a < .1){
+    vec4 above = texture(u_tex, uvN+vec2(0,1)/u_tex_res);
+    if(above.a > .9){
+      o.rgb = color(above.r);
+    }
+  }
+  float sum = 0.;
+  for(float R = 0.; R < 2.; R++){
+    vec4 probe;
+    probe = texture(u_tex, uvN+vec2(0,R)/u_tex_res);
+    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+    probe = texture(u_tex, uvN+vec2(0,-R)/u_tex_res);
+    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+    probe = texture(u_tex, uvN+vec2(R,0)/u_tex_res);
+    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+    probe = texture(u_tex, uvN+vec2(-R,0)/u_tex_res);
+    if(probe.a>.9) sum += min(1., .0002 / fract(u_time / PI * (1. + rnd(probe.r + .2)) + rnd2D(uvN) + rnd(probe.r * 10.))) * rnd(probe.r * 10.+.1);
+  }
+// o+=sum;
+o+=step(.4, sum);
+
+
   o.a = 1.;
+  // o = mix(o, texture(backbuffer, uvN), (u_time<1.)?0.:.8);
 }
 `;
 const canvas = document.getElementById('canvasgl');
@@ -7688,14 +7731,13 @@ const gl = canvas.getContext('webgl2', {
 });
 gl.getExtension('EXT_color_buffer_float');
 gl.getExtension('OES_texture_float_linear');
+canvas.style.imageRendering = 'pixelated';
+document.body.style.background = 'black';
 let tick = 0;
 __default.resizeCanvasToDisplaySize(gl.canvas);
 const zsw = new ZShaderWrapper(gl, __default);
 const passes = {
-    gi: zsw.createPass(glsl, [
-        128,
-        128
-    ], gl.RGBA),
+    gi: zsw.createPass(glsl, []),
     draw: zsw.createPass(glsl1)
 };
 const params = [
@@ -7705,23 +7747,18 @@ const params = [
 const timeI = new Date() / 1000;
 function draw() {
     const time = new Date() / 1000;
-    __default.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     passes.gi.draw({
         u_frame: tick,
         u_tex: passes.gi.b,
         u_time: time - timeI,
-        u_params: params,
-        u_voxels_num: 128
+        u_params: params
     }, 'self');
     passes.draw.draw({
+        u_time: time - timeI,
         u_tex: passes.gi.b,
-        u_resolution: [
-            canvas.width,
-            canvas.height
-        ],
         u_tex_res: passes.gi.resolution
-    }, 'screen');
+    }, 'both');
     tick++;
     console.log(tick);
     requestAnimationFrame(draw);
@@ -7731,15 +7768,21 @@ window.addEventListener('resize', (e)=>{
     resize();
 });
 function resize() {
-    const h = 128;
-    const w = Math.floor(128 * window.innerWidth / window.innerHeight);
-    console.log(w, 128);
-    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, 128);
-    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, 128);
+    const h = 256;
+    const w = Math.floor(256 * window.innerWidth / window.innerHeight);
+    console.log(w, 256);
+    __default.resizeFramebufferInfo(gl, passes.gi.buffer, passes.gi.attachments, w, 256);
+    __default.resizeFramebufferInfo(gl, passes.gi.backbuffer, passes.gi.attachments, w, 256);
     passes.gi.resolution = [
         w,
         h
     ];
+    passes.draw.resolution = [
+        w,
+        h
+    ];
+    canvas.width = w;
+    canvas.height = h;
     tick = 0;
 }
 resize();

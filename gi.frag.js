@@ -32,27 +32,30 @@ ${ g.snoiseCommon + g.snoise3D + g.fsnoise }
 #define t u_time
 #define FC gl_FragCoord
 
-bool plannedToBeGround(vec2 uv){
-    return snoise3D(vec3(uv.xy*8.,t*.1)) > .5;
+bool plannedToBeGround(vec2 uv,float frame){
+    return snoise3D(vec3(uv*vec2(2,40),t*.01)) > .7;
+    // return 0.>sin(frame-1.+uv.x);
 }
 
 void main() {
 
 #define col(c) (c-cos((c + off) * 2. * PI) * mul + add)
-vec3 off = vec3(.0, .2, .3);
+vec3 off = vec3(.0, .3, .4);
 vec3 mul = vec3(.5, .5, .5);
 vec3 add = vec3(.5, .5, .5);
 
 vec2 uv = FC.xy/u_resolution;
 
-if(f<1. && length(uv-.501)<.2){
-  o.a = 1.;
-  o.rgb += 1.;
-  return;
+// spawning
+if(f<1. && length(uv-.501)<.3){
+    o.a = 1.;
+    o.rgb = vec3(fract(rnd2D(uv*100.+10.) + uv.x * 100.));
+    return;
 }
 
+// земля останется землёй
 if(isGround(tx(0,0))){
-    if(plannedToBeGround(uv))
+    if(plannedToBeGround(uv, u_frame))
         o.a=.5;
     return;
 }
@@ -64,7 +67,7 @@ if(isSand(tx(0,0))){
     // если ничего не прилетит в эту дырку слева  
     if(isSand(tx(-1,0)) && tx(-1,-1)>0. && fallR(-1,0) && prio(0,0)< prio(-1,0)) return;
     if(isSand(tx( 1,0)) && tx( 1,-1)>0. && fallL( 1,0) && prio(0,0)<=prio( 1,0)) return;
-    o.a-=1.; 
+    o.a=.0; 
   }
   // если слева дырка
   if(tx(-1,-1)==0. && fallL(0,0)){ // если слева дырка и я хочу бухнуться влево
@@ -72,7 +75,7 @@ if(isSand(tx(0,0))){
     if(isSand(tx(-1,0)) && prio(0,0)>=prio(-1,0)) return;
     // если ничего не прилетит в эту ячейку ещё более слева
     if(isSand(tx(-2,0)) && tx(-2,-1)>0. && fallR(-2,0) && prio(0,0)<prio(-2,0)) return;
-    o.a-=1.;
+    o.a=.0; 
   }
   // если справа дырка
   if(tx(1,-1)==0. && fallR(0,0)){
@@ -80,7 +83,7 @@ if(isSand(tx(0,0))){
     if(isSand(tx(1,0)) && prio(0,0)>prio(1,0)) return;
     // если ничего не прилетит в эту ячейку ещё более справа
     if(isSand(tx(2,0)) && tx(2,-1)>0. && fallL(2,0) && prio(0,0)<=prio(2,0)) return; 
-    o.a-=1.;
+    o.a=.0; 
   }
 }
 else{
@@ -108,7 +111,7 @@ else{
     }
 
     if(o.a==0.){
-        if(plannedToBeGround(uv))
+        if(plannedToBeGround(uv, u_frame))
             o.a=.5;
     }
 }
